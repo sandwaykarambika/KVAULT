@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KVault — Distributed Key-Value Cloud</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#050507;--surface:#0b0b10;--surface-2:#12121a;--surface-3:#1a1a24;
+    --border:#1e1e2a;--border-2:#2a2a38;
+    --text:#ebebf2;--muted:#7a7a92;--muted-2:#4a4a5e;
+    --accent:#8b5cf6;--accent-2:#06b6d4;--green:#10b981;--red:#ef4444;--amber:#f59e0b;
+    --shadow:0 8px 32px rgba(0,0,0,0.5);
+    --sidebar-w:240px;
+  }
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  input,select{font-family:inherit}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:4px}
+
+  #login-view{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(900px 500px at 15% 10%,rgba(139,92,246,0.18),transparent 60%),radial-gradient(800px 500px at 85% 90%,rgba(6,182,212,0.14),transparent 60%),var(--bg);z-index:100;}
+  .login-card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px;box-shadow:var(--shadow);animation:fadeUp .5s ease}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+  .login-logo{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-weight:800;font-size:24px;color:white;margin-bottom:22px}
+  .login-card h1{font-size:22px;font-weight:700;margin-bottom:6px}
+  .login-card>p{color:var(--muted);font-size:13.5px;margin-bottom:28px}
+  .login-field{margin-bottom:16px}
+  .login-field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px}
+  .login-field input{width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14px;outline:none}
+  .login-btn{width:100%;padding:13px;border-radius:10px;font-size:14px;font-weight:600;background:linear-gradient(135deg,var(--accent),#6d28d9);color:white;box-shadow:0 4px 18px rgba(139,92,246,0.4);margin-top:8px}
+  .login-hint{text-align:center;color:var(--muted-2);font-size:12px;margin-top:20px}
+
+  /* ============ APP SHELL (with collapsible sidebar) ============ */
+  #app{
+    display:none;
+    height:100vh;
+    grid-template-columns:var(--sidebar-w) 1fr;
+    grid-template-rows:56px 1fr;
+    transition:grid-template-columns .28s cubic-bezier(.4,0,.2,1);
+  }
+  #app.active{display:grid}
+  #app.collapsed{grid-template-columns:0px 1fr}
+
+  .sidebar{
+    grid-row:1/3;
+    background:var(--surface);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:16px 12px;
+    overflow:hidden;
+    width:var(--sidebar-w);
+    transition:width .28s cubic-bezier(.4,0,.2,1);
+  }
+  #app.collapsed .sidebar{
+    width:0;
+    padding-left:0;
+    padding-right:0;
+    border-right:none;
+  }
+  .sidebar-brand{display:flex;align-items:center;gap:10px;padding:8px 8px 20px;margin-bottom:8px;border-bottom:1px solid var(--border);white-space:nowrap}
+  .sidebar-logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-weight:800;font-size:15px;color:white;flex-shrink:0}
+  .sidebar-brand-text h3{font-size:14px;font-weight:700}
+  .sidebar-brand-text p{font-size:10.5px;color:var(--muted);margin-top:1px}
+  .nav-section{margin-top:6px}
+  .nav-label{font-size:10.5px;color:var(--muted-2);text-transform:uppercase;letter-spacing:1px;font-weight:700;padding:12px 10px 8px;white-space:nowrap}
+  .nav-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:9px;color:var(--muted);font-size:13.5px;font-weight:500;transition:all .15s;cursor:pointer;width:100%;text-align:left;margin-bottom:1px;white-space:nowrap}
+  .nav-item:hover{background:var(--surface-2);color:var(--text)}
+  .nav-item.active{background:linear-gradient(90deg,rgba(139,92,246,0.15),transparent);color:var(--text);font-weight:600}
+  .nav-item.active svg{color:var(--accent)}
+  .nav-item svg{width:16px;height:16px;flex-shrink:0}
+  .nav-item .badge-count{margin-left:auto;font-size:10.5px;background:var(--surface-3);color:var(--muted);padding:2px 7px;border-radius:999px;font-weight:600}
+  .sidebar-footer{margin-top:auto;padding-top:14px;border-top:1px solid var(--border)}
+  .user-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;white-space:nowrap}
+  .avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent-2),var(--accent));display:grid;place-items:center;font-weight:700;font-size:12.5px;color:white;flex-shrink:0}
+  .user-info{flex:1;min-width:0}
+  .user-info .uname{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .user-info .urole{font-size:11px;color:var(--muted)}
+
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;gap:16px}
+  .topbar-left{display:flex;align-items:center;gap:14px}
+  .sidebar-toggle{
+    width:36px;height:36px;border-radius:9px;display:grid;place-items:center;
+    color:var(--muted);border:1px solid transparent;transition:all .15s;
+    flex-shrink:0;
+  }
+  .sidebar-toggle:hover{background:var(--surface-2);color:var(--text);border-color:var(--border)}
+  .sidebar-toggle svg{width:18px;height:18px;transition:transform .25s}
+  .breadcrumb{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+  .breadcrumb .current{color:var(--text);font-weight:600}
+  .breadcrumb svg{width:14px;height:14px}
+  .topbar-right{display:flex;align-items:center;gap:10px}
+  .env-pill{display:flex;align-items:center;gap:7px;padding:6px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;font-size:12px;font-weight:600;color:var(--green);white-space:nowrap}
+  .env-pill.warn{color:var(--amber)}
+  .env-pill.down{color:var(--red)}
+  .env-dot{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor;animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+  .icon-btn{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--muted);border:1px solid transparent}
+  .icon-btn:hover{background:var(--surface-2);color:var(--text);border-color:var(--border)}
+  .icon-btn svg{width:16px;height:16px}
+
+  .main{overflow-y:auto;padding:28px 32px 80px;position:relative}
+  .view{position:relative;z-index:1;display:none;animation:fadeIn .3s ease}
+  .view.active{display:block}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .page-header{margin-bottom:24px}
+  .page-header h1{font-size:24px;font-weight:700;letter-spacing:-0.6px;margin-bottom:4px}
+  .page-header p{color:var(--muted);font-size:13.5px}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px}
+  .card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+  .card-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .card-title .count{font-size:11px;background:var(--surface-3);color:var(--muted);padding:2px 8px;border-radius:999px;font-weight:600}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+  .stat-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+  .stat-icon{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--surface-2)}
+  .stat-icon svg{width:15px;height:15px}
+  .stat-label{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;font-weight:600}
+  .stat-value{font-size:26px;font-weight:700;letter-spacing:-0.6px}
+  .stat-value small{font-size:14px;color:var(--muted);font-weight:500}
+  .stat-sub{font-size:11.5px;color:var(--muted);margin-top:5px}
+
+  .nodes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+  .node{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;position:relative;overflow:hidden;transition:all .3s}
+  .node::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--muted-2);transition:all .3s}
+  .node.up::before{background:var(--green);box-shadow:0 0 20px var(--green)}
+  .node.down::before{background:var(--red);box-shadow:0 0 20px var(--red)}
+  .node.down{opacity:0.55}
+  .node.highlight{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 8px 30px rgba(139,92,246,0.3)}
+  .node-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+  .node-name{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .node-port{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);background:var(--surface-2);padding:2px 8px;border-radius:6px}
+  .node-role{font-size:11px;color:var(--muted);margin-top:4px}
+  .badge{font-size:10.5px;padding:4px 10px;border-radius:6px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase}
+  .badge.up{background:rgba(16,185,129,0.12);color:var(--green)}
+  .badge.down{background:rgba(239,68,68,0.12);color:var(--red)}
+  .node-metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:14px;border-top:1px solid var(--border);margin-bottom:14px}
+  .metric-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600}
+  .metric-value{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;margin-top:3px}
+  .chaos-btn{width:100%;padding:8px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--surface-2);color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px}
+  .chaos-btn:hover{border-color:var(--red);color:var(--red);background:rgba(239,68,68,0.08)}
+  .chaos-btn.recover:hover{border-color:var(--green);color:var(--green);background:rgba(16,185,129,0.08)}
+  .chaos-btn svg{width:12px;height:12px}
+
+  /* =========== TRACE =========== */
+  .trace-panel{background:#030306;border:1px solid var(--border);border-radius:14px;padding:18px;min-height:180px}
+  .trace-result{
+    background:linear-gradient(135deg, rgba(16,185,129,0.10), rgba(139,92,246,0.06));
+    border:1px solid rgba(16,185,129,0.35);
+    border-radius:14px;padding:22px 24px;margin-bottom:16px;animation:fadeUp .35s ease;
+  }
+  .trace-result.error{background:linear-gradient(135deg, rgba(239,68,68,0.10), transparent);border-color:rgba(239,68,68,0.35)}
+  .trace-result.warn{background:linear-gradient(135deg, rgba(245,158,11,0.10), transparent);border-color:rgba(245,158,11,0.35)}
+  .trace-result-label{font-size:11px;text-transform:uppercase;letter-spacing:1.4px;font-weight:700;color:var(--green);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .trace-result.error .trace-result-label{color:var(--red)}
+  .trace-result.warn .trace-result-label{color:var(--amber)}
+  .trace-result-label svg{width:14px;height:14px}
+  .trace-result-value{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:var(--text);word-break:break-all;line-height:1.35;letter-spacing:-0.5px}
+  .trace-result-value.empty{color:var(--muted-2);font-style:italic;font-size:18px;font-weight:500}
+  .trace-result-meta{font-size:12.5px;color:var(--muted);margin-top:12px;font-family:'JetBrains Mono',monospace;display:flex;flex-wrap:wrap;gap:16px}
+  .trace-result-meta b{color:var(--accent-2);font-weight:600}
+
+  .trace-steps-toggle{font-size:12.5px;color:var(--accent-2);cursor:pointer;font-weight:600;padding:10px 0;display:inline-flex;align-items:center;gap:8px;user-select:none}
+  .trace-steps-toggle:hover{color:var(--accent)}
+  .trace-steps-toggle svg{width:12px;height:12px;transition:transform .2s}
+  .trace-steps-toggle.open svg{transform:rotate(90deg)}
+  .trace-steps{display:none}
+  .trace-steps.open{display:block}
+
+  .trace-step{display:flex;gap:14px;padding:12px 14px;border-radius:10px;background:var(--surface);border:1px solid var(--border);margin-bottom:10px;opacity:0;transform:translateX(-8px);animation:stepIn .35s ease forwards}
+  .trace-step:nth-child(1){animation-delay:.03s}
+  .trace-step:nth-child(2){animation-delay:.13s}
+  .trace-step:nth-child(3){animation-delay:.23s}
+  .trace-step:nth-child(4){animation-delay:.33s}
+  .trace-step:nth-child(5){animation-delay:.43s}
+  @keyframes stepIn{to{opacity:1;transform:translateX(0)}}
+  .trace-icon{width:36px;height:36px;border-radius:10px;flex-shrink:0;display:grid;place-items:center}
+  .trace-icon svg{width:18px;height:18px}
+  .trace-icon.blue{background:rgba(6,182,212,0.15);color:var(--accent-2)}
+  .trace-icon.purple{background:rgba(139,92,246,0.15);color:var(--accent)}
+  .trace-icon.green{background:rgba(16,185,129,0.15);color:var(--green)}
+  .trace-icon.red{background:rgba(239,68,68,0.15);color:var(--red)}
+  .trace-body{flex:1;min-width:0}
+  .trace-title{font-size:13px;font-weight:600;margin-bottom:2px}
+  .trace-desc{font-size:12.5px;color:var(--muted);font-family:'JetBrains Mono',monospace;word-break:break-all}
+  .trace-badge{display:inline-block;font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:5px;background:var(--surface-2);color:var(--accent-2);font-family:'JetBrains Mono',monospace;margin-top:4px}
+  .trace-empty{padding:40px 20px;text-align:center;color:var(--muted-2);font-size:13px}
+  .trace-empty svg{width:44px;height:44px;margin-bottom:12px;opacity:0.3}
+
+  /* TABLE */
+  .table-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px}
+  .search{background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:9px;font-size:13px;outline:none;width:240px}
+  .search:focus{border-color:var(--accent)}
+  .search::placeholder{color:var(--muted-2)}
+  .table{width:100%}
+  .table-head{display:grid;grid-template-columns:1.4fr 1.4fr 1.2fr 70px;gap:8px;padding:10px 14px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;font-weight:700;border-bottom:1px solid var(--border)}
+  .table-row{display:grid;grid-template-columns:1.4fr 1.4fr 1.2fr 70px;gap:8px;padding:12px 14px;align-items:center;border-bottom:1px solid rgba(30,30,42,0.5);font-size:13px;transition:background .15s}
+  .table-row:hover{background:var(--surface-2)}
+  .table-row:last-child{border-bottom:none}
+  .key-cell{font-family:'JetBrains Mono',monospace;color:var(--accent-2);font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .val-cell{font-family:'JetBrains Mono',monospace;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .replica-list{display:flex;gap:4px;flex-wrap:wrap}
+  .replica-chip{font-size:10.5px;font-family:'JetBrains Mono',monospace;padding:2px 7px;border-radius:5px;background:var(--surface-3);color:var(--accent-2);border:1px solid var(--border);font-weight:600}
+  .replica-chip.primary{background:rgba(139,92,246,0.15);color:var(--accent);border-color:rgba(139,92,246,0.3)}
+  .row-actions{display:flex;gap:4px;justify-content:flex-end;opacity:0;transition:opacity .15s}
+  .table-row:hover .row-actions{opacity:1}
+  .icon-btn-sm{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;color:var(--muted);border:1px solid var(--border)}
+  .icon-btn-sm:hover{border-color:var(--red);color:var(--red)}
+  .icon-btn-sm svg{width:13px;height:13px}
+  .empty-state{padding:60px 20px;text-align:center;color:var(--muted);font-size:13px}
+
+  .btn{padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:7px;border:1px solid transparent}
+  .btn svg{width:14px;height:14px}
+  .btn-primary{background:linear-gradient(135deg,var(--accent),#6d28d9);color:white;box-shadow:0 4px 14px rgba(139,92,246,0.35)}
+  .btn-primary:hover{transform:translateY(-1px)}
+  .btn-secondary{background:var(--surface-2);color:var(--text);border-color:var(--border)}
+
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:200}
+  .modal-backdrop.active{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:26px;width:100%;max-width:580px;box-shadow:var(--shadow);animation:fadeUp .25s;max-height:90vh;overflow-y:auto}
+  .modal.wide{max-width:780px}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .modal-head h2{font-size:17px;font-weight:700}
+  .modal-head p{color:var(--muted);font-size:13px;margin-top:2px}
+  .modal-close{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--muted)}
+  .modal-close:hover{background:var(--surface-2);color:var(--text)}
+  .modal-body{margin-top:20px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px}
+  .input{width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:11px 14px;border-radius:10px;font-size:13.5px;outline:none;font-family:'JetBrains Mono',monospace}
+  .input:focus{border-color:var(--accent)}
+  .input::placeholder{color:var(--muted-2);font-family:'Inter',sans-serif}
+  select.input{cursor:pointer;font-family:'Inter',sans-serif}
+  .modal-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}
+
+  #toasts{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:10px;z-index:300}
+  .toast{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 18px;min-width:280px;box-shadow:var(--shadow);display:flex;align-items:center;gap:12px;animation:slideIn .3s ease}
+  @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+  .toast-icon{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+  .toast-icon svg{width:14px;height:14px}
+  .toast.success .toast-icon{background:rgba(16,185,129,0.15);color:var(--green)}
+  .toast.error .toast-icon{background:rgba(239,68,68,0.15);color:var(--red)}
+  .toast.info .toast-icon{background:rgba(6,182,212,0.15);color:var(--accent-2)}
+  .toast-body{flex:1}
+  .toast-title{font-size:13px;font-weight:600}
+  .toast-msg{font-size:12px;color:var(--muted);margin-top:2px}
+
+  .log-wrap{background:#030306;border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-family:'JetBrains Mono',monospace;font-size:12px;height:260px;overflow-y:auto;line-height:1.7}
+  .log-line{display:flex;gap:10px}
+  .log-time{color:var(--muted-2);flex-shrink:0}
+  .log-msg{color:var(--muted)}
+  .log-line.ok .log-msg{color:var(--green)}
+  .log-line.err .log-msg{color:var(--red)}
+  .log-line.info .log-msg{color:var(--accent-2)}
+  .log-line.warn .log-msg{color:var(--amber)}
+
+  @media(max-width:1200px){.nodes{grid-template-columns:1fr 1fr}}
+  @media(max-width:900px){
+    #app.active{grid-template-columns:0px 1fr}
+    .sidebar{width:0;padding:0;border-right:none}
+    #app.mobile-open .sidebar{width:var(--sidebar-w);padding:16px 12px;border-right:1px solid var(--border)}
+    .stats{grid-template-columns:1fr 1fr}
+    .nodes{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<div id="login-view">
+  <div class="login-card">
+    <div class="login-logo">K</div>
+    <h1>Welcome to KVault</h1>
+    <p>Distributed key-value cloud for modern applications</p>
+    <form onsubmit="handleLogin(event)">
+      <div class="login-field"><label>Email</label><input type="email" id="login-email" value="admin@kvault.io" required></div>
+      <div class="login-field"><label>Password</label><input type="password" id="login-pass" value="demo1234" required></div>
+      <button type="submit" class="login-btn">Sign in to dashboard</button>
+    </form>
+    <div class="login-hint">Demo credentials pre-filled — just click <b>Sign in</b></div>
+  </div>
+</div>
+
+<div id="app">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo">K</div>
+      <div class="sidebar-brand-text"><h3>KVault</h3><p>Cloud Console</p></div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Workspace</div>
+      <button class="nav-item active" data-view="overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        Overview
+      </button>
+      <button class="nav-item" data-view="keyspace">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+        Keyspace <span class="badge-count" id="nav-keys-count">0</span>
+      </button>
+      <button class="nav-item" data-view="cluster">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="6" rx="2"/><rect x="2" y="15" width="20" height="6" rx="2"/></svg>
+        Cluster
+      </button>
+      <button class="nav-item" data-view="chaos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Chaos Lab
+      </button>
+      <button class="nav-item" data-view="activity">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Activity
+      </button>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Developer</div>
+      <button class="nav-item" data-view="playground">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        API Playground
+      </button>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <div class="avatar" id="user-avatar">A</div>
+        <div class="user-info"><div class="uname" id="user-name">Admin</div><div class="urole">Owner</div></div>
+        <button class="icon-btn" onclick="logout()" title="Log out">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+        <svg id="sidebar-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <div class="breadcrumb">
+        <span>KVault</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="current" id="crumb">Overview</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="env-pill" id="env-pill"><span class="env-dot"></span><span id="env-text">Production</span></div>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="view active" id="view-overview">
+      <div class="page-header">
+        <h1>Overview</h1>
+        <p>Real-time health and metrics for your 3-node cluster</p>
+      </div>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-top"><div class="stat-icon" style="color:var(--green)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="6" rx="2"/><rect x="2" y="15" width="20" height="6" rx="2"/></svg></div></div>
+          <div class="stat-label">Nodes Online</div>
+          <div class="stat-value" id="stat-nodes">–<small>/3</small></div>
+          <div class="stat-sub" id="stat-nodes-sub">checking…</div>
+        </div>
+        <div class="stat">
+          <div class="stat-top"><div class="stat-icon" style="color:var(--accent-2)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></div></div>
+          <div class="stat-label">Unique Keys</div>
+          <div class="stat-value" id="stat-keys">0</div>
+          <div class="stat-sub">across cluster</div>
+        </div>
+        <div class="stat">
+          <div class="stat-top"><div class="stat-icon" style="color:var(--accent)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></div></div>
+          <div class="stat-label">Replication</div>
+          <div class="stat-value" id="stat-repl">100<small>%</small></div>
+          <div class="stat-sub">keys fully synced</div>
+        </div>
+        <div class="stat">
+          <div class="stat-top"><div class="stat-icon" style="color:var(--amber)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div></div>
+          <div class="stat-label">Avg Latency</div>
+          <div class="stat-value" id="stat-lat">–<small>ms</small></div>
+          <div class="stat-sub">round-trip to nodes</div>
+        </div>
+      </div>
+
+      <div class="nodes" id="overview-nodes"></div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--accent)"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Last Operation — Live Trace
+          </div>
+          <button class="btn btn-secondary" onclick="clearTrace()">Clear</button>
+        </div>
+        <div class="trace-panel" id="overview-trace">
+          <div class="trace-empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <div>Perform a PUT, GET, or DELETE to see the story of what happens inside the cluster</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">Recent Activity</div>
+          <button class="btn btn-secondary" onclick="switchView('activity')">View all</button>
+        </div>
+        <div class="log-wrap" id="overview-log" style="height:180px"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-keyspace">
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end">
+        <div><h1>Keyspace</h1><p>All keys and which nodes hold them</p></div>
+        <button class="btn btn-primary" onclick="openPutModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New key
+        </button>
+      </div>
+      <div class="card">
+        <div class="table-toolbar">
+          <input class="search" id="search" placeholder="Search keys or values…" oninput="renderTable()">
+          <div style="margin-left:auto;color:var(--muted);font-size:12.5px" id="keys-total"></div>
+        </div>
+        <div class="table">
+          <div class="table-head"><div>Key</div><div>Value</div><div>Replicas</div><div></div></div>
+          <div id="table-body"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-cluster">
+      <div class="page-header"><h1>Cluster</h1><p>Node topology and hash ring distribution</p></div>
+      <div class="nodes" id="cluster-nodes"></div>
+    </section>
+
+    <section class="view" id="view-chaos">
+      <div class="page-header"><h1>Chaos Lab</h1><p>Simulate node outages and watch the cluster self-heal</p></div>
+      <div class="nodes" id="chaos-nodes"></div>
+      <div class="card" style="margin-top:14px">
+        <div class="card-title" style="margin-bottom:10px">How it works</div>
+        <div style="color:var(--muted);font-size:13px;line-height:1.9">
+          <div>1. Click <b style="color:var(--red)">Simulate Outage</b> on a node — it stops responding.</div>
+          <div>2. Writes continue — the hash ring routes around the dead node.</div>
+          <div>3. Click <b style="color:var(--green)">Recover Node</b> — anti-entropy + hints sync missing keys within 5s.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-activity">
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end">
+        <div><h1>Activity</h1><p>Full event log</p></div>
+        <button class="btn btn-secondary" onclick="clearLog()">Clear log</button>
+      </div>
+      <div class="card"><div class="log-wrap" id="full-log" style="height:520px"></div></div>
+    </section>
+
+    <section class="view" id="view-playground">
+      <div class="page-header"><h1>API Playground</h1><p>Send requests to any node — the ring handles routing</p></div>
+      <div style="display:grid;grid-template-columns:1fr 1.3fr;gap:14px">
+        <div class="card">
+          <div class="card-title" style="margin-bottom:16px">Request Builder</div>
+          <div class="field"><label>Method</label>
+            <select class="input" id="pg-method">
+              <option value="PUT">PUT — Store a value</option>
+              <option value="GET">GET — Retrieve a value</option>
+              <option value="DELETE">DELETE — Remove a key</option>
+            </select>
+          </div>
+          <div class="field"><label>Target Node (any — ring routes)</label>
+            <select class="input" id="pg-node">
+              <option value="8080">node-1 (:8080)</option>
+              <option value="8081">node-2 (:8081)</option>
+              <option value="8082">node-3 (:8082)</option>
+            </select>
+          </div>
+          <div class="field"><label>Key</label><input class="input" id="pg-key" placeholder="user:100"></div>
+          <div class="field"><label>Value</label><input class="input" id="pg-value" placeholder="Alice"></div>
+          <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="runPlayground()">Send request</button>
+        </div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:16px">Live Trace</div>
+          <div class="trace-panel" id="pg-trace">
+            <div class="trace-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <div>Send a request to see the trace</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="put-modal">
+  <div class="modal wide">
+    <div class="modal-head">
+      <div><h2>New Key</h2><p>Store a key-value pair in the cluster</p></div>
+      <button class="modal-close" onclick="closeModal('put-modal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="put-modal-body">
+      <div class="field"><label>Target node (any — ring will route)</label>
+        <select class="input" id="put-node">
+          <option value="8080">node-1 (:8080)</option>
+          <option value="8081">node-2 (:8081)</option>
+          <option value="8082">node-3 (:8082)</option>
+        </select>
+      </div>
+      <div class="field"><label>Key</label><input class="input" id="put-key" placeholder="e.g. user:42"></div>
+      <div class="field"><label>Value</label><input class="input" id="put-value" placeholder="e.g. Alice"></div>
+    </div>
+    <div class="modal-foot" id="put-modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal('put-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitPut()">Store value</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+const NODES = [
+  { id: 'node-1', port: 8080, role: 'Primary · leader' },
+  { id: 'node-2', port: 8081, role: 'Replica · follower' },
+  { id: 'node-3', port: 8082, role: 'Replica · follower' }
+];
+const state = { health:{}, keys:{}, latency:{} };
+NODES.forEach(n => { state.health[n.port]=false; state.keys[n.port]={}; state.latency[n.port]='–'; });
+
+/* ============== SIDEBAR TOGGLE ============== */
+function toggleSidebar(){
+  const app = document.getElementById('app');
+  const collapsed = app.classList.toggle('collapsed');
+  localStorage.setItem('kvault_sidebar_collapsed', collapsed ? '1' : '0');
+  updateSidebarIcon();
+}
+function updateSidebarIcon(){
+  const app = document.getElementById('app');
+  const icon = document.getElementById('sidebar-toggle-icon');
+  if(!icon) return;
+  const collapsed = app.classList.contains('collapsed');
+  if(collapsed){
+    // Chevron pointing right (open it)
+    icon.innerHTML = '<polyline points="9 18 15 12 9 6"/>';
+  } else {
+    // Hamburger (close it)
+    icon.innerHTML = '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>';
+  }
+}
+function restoreSidebar(){
+  const saved = localStorage.getItem('kvault_sidebar_collapsed') === '1';
+  const app = document.getElementById('app');
+  app.classList.toggle('collapsed', saved);
+  updateSidebarIcon();
+}
+
+function handleLogin(e){
+  e.preventDefault();
+  const email = document.getElementById('login-email').value.trim();
+  const name = email.split('@')[0];
+  localStorage.setItem('kvault_user', JSON.stringify({ email, name }));
+  enterApp();
+  toast('success','Welcome back', `Signed in as ${email}`);
+  log(`User signed in: ${email}`, 'info');
+}
+function logout(){
+  localStorage.removeItem('kvault_user');
+  document.getElementById('app').classList.remove('active');
+  document.getElementById('login-view').style.display='flex';
+}
+function enterApp(){
+  const u = JSON.parse(localStorage.getItem('kvault_user')||'null');
+  if(!u) return;
+  document.getElementById('user-name').textContent = u.name.charAt(0).toUpperCase()+u.name.slice(1);
+  document.getElementById('user-avatar').textContent = u.name.charAt(0).toUpperCase();
+  document.getElementById('login-view').style.display='none';
+  document.getElementById('app').classList.add('active');
+  restoreSidebar();
+}
+
+const VIEW_LABELS={overview:'Overview',keyspace:'Keyspace',cluster:'Cluster',chaos:'Chaos Lab',activity:'Activity',playground:'API Playground'};
+function switchView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===name));
+  document.getElementById('crumb').textContent = VIEW_LABELS[name]||name;
+}
+document.querySelectorAll('.nav-item').forEach(n=>n.addEventListener('click',()=>switchView(n.dataset.view)));
+
+function toast(type,title,msg){
+  const el=document.createElement('div');
+  el.className='toast '+type;
+  const icon = type==='success' ? '<polyline points="20 6 9 17 4 12"/>' :
+               type==='error'   ? '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>' :
+                                  '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>';
+  el.innerHTML=`<div class="toast-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${icon}</svg></div>
+    <div class="toast-body"><div class="toast-title">${title}</div>${msg?`<div class="toast-msg">${escapeHtml(msg)}</div>`:''}</div>`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .3s';setTimeout(()=>el.remove(),300);},3500);
+}
+
+const logBuffer=[];
+function log(msg,cls=''){
+  const t=new Date().toLocaleTimeString('en-US',{hour12:false});
+  logBuffer.unshift({t,msg,cls});
+  if(logBuffer.length>200) logBuffer.pop();
+  renderLogs();
+}
+function renderLogs(){
+  const html = logBuffer.map(l=>`<div class="log-line ${l.cls}"><span class="log-time">${l.t}</span><span class="log-msg">${escapeHtml(l.msg)}</span></div>`).join('') || '<div class="log-line info"><span class="log-msg">No activity yet</span></div>';
+  const full=document.getElementById('full-log'); if(full) full.innerHTML=html;
+  const ov=document.getElementById('overview-log'); if(ov) ov.innerHTML = logBuffer.slice(0,8).map(l=>`<div class="log-line ${l.cls}"><span class="log-time">${l.t}</span><span class="log-msg">${escapeHtml(l.msg)}</span></div>`).join('') || '<div class="log-line info"><span class="log-msg">No activity yet</span></div>';
+}
+function clearLog(){ logBuffer.length=0; renderLogs(); toast('info','Log cleared',''); }
+
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+/* ==================== TRACE RENDERER ==================== */
+function nodeLabel(url){
+  if(!url) return '?';
+  if(url.includes('8080')) return 'node-1';
+  if(url.includes('8081')) return 'node-2';
+  if(url.includes('8082')) return 'node-3';
+  return url;
+}
+
+function renderTrace(trace, targetEl){
+  if(!trace){
+    targetEl.innerHTML = `<div class="trace-empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <div>Send a request to see the trace</div>
+    </div>`;
+    return;
+  }
+
+  const op = trace.operation || '?';
+  const key = trace.key || '?';
+  const receivedBy = nodeLabel(trace.receivedBy);
+  const primary = nodeLabel(trace.primary);
+  const hash = trace.hash || '?';
+  const replicas = (trace.replicas || []).map(nodeLabel);
+  const acks = trace.acks || 0;
+  const quorum = trace.requiredQuorum || 0;
+  const hints = trace.hints || 0;
+  const success = trace.success;
+
+  let resultClass = success ? '' : 'error';
+  let resultLabel = '';
+  let resultIcon = '';
+  let resultValue = '';
+  let resultMeta = '';
+
+  if(op === 'GET'){
+    resultLabel = success ? 'RETRIEVED' : 'NOT FOUND';
+    resultIcon = success ? '<polyline points="20 6 9 17 4 12"/>' : '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>';
+    resultValue = success ? `<div class="trace-result-value">${escapeHtml(trace.value || '')}</div>` : `<div class="trace-result-value empty">Key not found</div>`;
+    resultMeta = success ? `<span>key: <b>${escapeHtml(key)}</b></span><span>read from <b>${acks}</b> replica(s)</span>` : `<span>key: <b>${escapeHtml(key)}</b></span>`;
+  } else if(op === 'PUT'){
+    if(success){
+      resultLabel = 'STORED';
+      resultIcon = '<polyline points="20 6 9 17 4 12"/>';
+      resultValue = `<div class="trace-result-value">${escapeHtml(key)} <span style="color:var(--muted);font-weight:500">=</span> "${escapeHtml(trace.value || '')}"</div>`;
+      resultMeta = `<span>replicated to <b>${acks}/${quorum}</b> nodes</span>${hints > 0 ? `<span style="color:var(--amber)"><b style="color:var(--amber)">${hints}</b> hint queued</span>` : ''}`;
+    } else {
+      resultLabel = 'QUORUM FAILED';
+      resultIcon = '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>';
+      resultValue = `<div class="trace-result-value empty">Write rejected — only ${acks}/${quorum} acks</div>`;
+      resultMeta = `<span>key: <b>${escapeHtml(key)}</b></span><span>reason: <b>${escapeHtml(trace.message || '')}</b></span>`;
+    }
+  } else if(op === 'DELETE'){
+    if(success){
+      resultLabel = 'DELETED';
+      resultIcon = '<polyline points="20 6 9 17 4 12"/>';
+      resultValue = `<div class="trace-result-value">${escapeHtml(key)} <span style="color:var(--muted);font-weight:500">has been removed</span></div>`;
+      resultMeta = `<span>removed from <b>${acks}</b> replicas</span>`;
+    } else {
+      resultLabel = 'DELETE FAILED';
+      resultIcon = '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>';
+      resultValue = `<div class="trace-result-value empty">${escapeHtml(trace.message || 'Key not found')}</div>`;
+      resultMeta = `<span>key: <b>${escapeHtml(key)}</b></span>`;
+    }
+  }
+
+  const resultBox = `
+    <div class="trace-result ${resultClass}">
+      <div class="trace-result-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">${resultIcon}</svg>
+        ${resultLabel}
+      </div>
+      ${resultValue}
+      <div class="trace-result-meta">${resultMeta}</div>
+    </div>`;
+
+  const steps = [];
+  steps.push({ icon: 'blue', title: `Request received by ${receivedBy}`, desc: `${op} /api/kv/${key}`, badge: null });
+  steps.push({ icon: 'purple', title: 'Hashing key with SHA-256', desc: `hash("${key}") = ${hash}`, badge: null });
+  steps.push({
+    icon: 'purple',
+    title: `Consistent hash ring lookup → primary is ${primary}`,
+    desc: trace.forwarded ? `Request forwarded from ${receivedBy} to ${primary}` : `This node (${receivedBy}) owns the key — no forward needed`,
+    badge: trace.forwarded ? 'FORWARDED' : 'LOCAL'
+  });
+  if(replicas.length){
+    steps.push({ icon: 'blue', title: `Replica set (${replicas.length} nodes)`, desc: replicas.join(' , '), badge: `RF=${replicas.length}` });
+  }
+
+  if(op === 'GET'){
+    steps.push(success
+      ? { icon: 'green', title: `Quorum read succeeded`, desc: trace.message || `Read from ${acks} replica(s)`, badge: `R=${acks}/${quorum}` }
+      : { icon: 'red', title: `Read failed`, desc: trace.message || 'Key not found', badge: '404' });
+  } else if(op === 'PUT' || op === 'DELETE'){
+    steps.push(success
+      ? { icon: 'green', title: hints > 0 ? `Quorum achieved (with ${hints} hint${hints>1?'s':''})` : `Quorum achieved`, desc: `Acknowledged by ${acks} of ${quorum} required nodes` + (hints > 0 ? ` · ${hints} replica(s) down — hint queued` : ''), badge: `${acks}/${quorum} ✓` }
+      : { icon: 'red', title: `Quorum FAILED`, desc: trace.message || `Only ${acks}/${quorum} acks — write rejected`, badge: `✗ ${acks}/${quorum}` });
+  }
+
+  const stepsHTML = steps.map(s => `
+    <div class="trace-step">
+      <div class="trace-icon ${s.icon}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          ${s.icon === 'blue' ? '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>' :
+             s.icon === 'purple' ? '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>' :
+             s.icon === 'green' ? '<polyline points="20 6 9 17 4 12"/>' :
+             s.icon === 'red' ? '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>' :
+             '<circle cx="12" cy="12" r="10"/>'}
+        </svg>
+      </div>
+      <div class="trace-body">
+        <div class="trace-title">${escapeHtml(s.title)}</div>
+        <div class="trace-desc">${escapeHtml(s.desc)}</div>
+        ${s.badge ? `<span class="trace-badge">${escapeHtml(s.badge)}</span>` : ''}
+      </div>
+    </div>`).join('');
+
+  const uid = 'steps-' + Math.random().toString(36).slice(2,9);
+  const toggleHTML = `
+    <div class="trace-steps-toggle open" onclick="toggleTraceSteps('${uid}', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      How this happened
+    </div>
+    <div class="trace-steps open" id="${uid}">
+      ${stepsHTML}
+    </div>`;
+
+  targetEl.innerHTML = resultBox + toggleHTML;
+}
+
+function toggleTraceSteps(id, el){
+  const steps = document.getElementById(id);
+  if(!steps) return;
+  const open = steps.classList.toggle('open');
+  el.classList.toggle('open', open);
+}
+
+function clearTrace(){
+  document.getElementById('overview-trace').innerHTML = `<div class="trace-empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+    <div>Perform a PUT, GET, or DELETE to see the story of what happens inside the cluster</div>
+  </div>`;
+}
+
+function setTrace(trace){
+  renderTrace(trace, document.getElementById('overview-trace'));
+  renderTrace(trace, document.getElementById('pg-trace'));
+}
+
+/* ==================== POLLING ==================== */
+async function pingNode(n){
+  const t0=performance.now();
+  try{
+    const r = await fetch(`http://localhost:${n.port}/api/health`,{cache:'no-store'});
+    const dt = Math.round(performance.now()-t0);
+    state.health[n.port] = r.ok;
+    state.latency[n.port] = r.ok ? dt+' ms' : '–';
+  }catch{
+    state.health[n.port]=false;
+    state.latency[n.port]='–';
+  }
+}
+async function fetchKeys(n){
+  try{
+    const r=await fetch(`http://localhost:${n.port}/api/kv/keys`,{cache:'no-store'});
+    if(r.ok){
+      const raw = await r.json();
+      const simplified = {};
+      Object.entries(raw).forEach(([k,v]) => {
+        simplified[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
+      });
+      state.keys[n.port] = simplified;
+    } else { state.keys[n.port] = {}; }
+  }catch{ state.keys[n.port]={}; }
+}
+
+function nodeCardHTML(n, chaosMode){
+  const up = state.health[n.port];
+  const count = Object.keys(state.keys[n.port]).length;
+  const chaosBtn = chaosMode ? `
+    <button class="chaos-btn ${up?'':'recover'}" onclick="toggleChaos(${n.port},${up})">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        ${up?'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>':'<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>'}
+      </svg>
+      ${up?'Simulate Outage':'Recover Node'}
+    </button>` : '';
+  return `
+    <div class="node ${up?'up':'down'}" data-port="${n.port}" id="node-${n.port}">
+      <div class="node-top">
+        <div>
+          <div class="node-name">${n.id} <span class="node-port">:${n.port}</span></div>
+          <div class="node-role">${n.role}</div>
+        </div>
+        <span class="badge ${up?'up':'down'}">${up?'Online':'Offline'}</span>
+      </div>
+      <div class="node-metrics">
+        <div><div class="metric-label">Keys</div><div class="metric-value">${up?count:'–'}</div></div>
+        <div><div class="metric-label">Latency</div><div class="metric-value">${state.latency[n.port]}</div></div>
+      </div>
+      ${chaosBtn}
+    </div>`;
+}
+function renderNodes(){
+  const html = NODES.map(n=>nodeCardHTML(n,false)).join('');
+  const a=document.getElementById('overview-nodes'); if(a) a.innerHTML=html;
+  const b=document.getElementById('cluster-nodes'); if(b) b.innerHTML=html;
+  const c=document.getElementById('chaos-nodes'); if(c) c.innerHTML=NODES.map(n=>nodeCardHTML(n,true)).join('');
+}
+
+function renderStats(){
+  const online = Object.values(state.health).filter(Boolean).length;
+  document.getElementById('stat-nodes').innerHTML = `${online}<small>/3</small>`;
+  document.getElementById('stat-nodes-sub').textContent = online===3?'all nodes healthy':online>=1?`degraded — ${3-online} node(s) down`:'cluster offline';
+
+  const all = new Set();
+  Object.values(state.keys).forEach(m=>Object.keys(m).forEach(k=>all.add(k)));
+  document.getElementById('stat-keys').textContent = all.size;
+  document.getElementById('nav-keys-count').textContent = all.size;
+  document.getElementById('keys-total').textContent = `${all.size} key${all.size===1?'':'s'}`;
+
+  let fullyReplicated = 0;
+  all.forEach(k=>{
+    const replicas = NODES.filter(n=>state.keys[n.port][k]!==undefined).length;
+    if(replicas >= 2) fullyReplicated++;
+  });
+  const pct = all.size===0?100:Math.round((fullyReplicated/all.size)*100);
+  document.getElementById('stat-repl').innerHTML = `${pct}<small>%</small>`;
+
+  const lats = NODES.map(n=>parseInt(state.latency[n.port])).filter(x=>!isNaN(x));
+  document.getElementById('stat-lat').innerHTML = lats.length ? `${Math.round(lats.reduce((a,b)=>a+b,0)/lats.length)}<small>ms</small>` : '–<small>ms</small>';
+
+  const pill = document.getElementById('env-pill');
+  const txt = document.getElementById('env-text');
+  pill.classList.remove('warn','down');
+  if(online===3){ txt.textContent='Production · healthy'; }
+  else if(online>=1){ pill.classList.add('warn'); txt.textContent=`Degraded · ${online}/3 online`; }
+  else{ pill.classList.add('down'); txt.textContent='Cluster offline'; }
+}
+
+function renderTable(){
+  const q=(document.getElementById('search')?.value||'').toLowerCase().trim();
+  const body=document.getElementById('table-body'); if(!body) return;
+
+  const map = {};
+  NODES.forEach(n=>{
+    Object.entries(state.keys[n.port]).forEach(([k,v])=>{
+      if(!map[k]) map[k]={value:v, owners:[]};
+      map[k].owners.push(n.port);
+    });
+  });
+
+  const rows = Object.entries(map).filter(([k,v])=> !q || k.toLowerCase().includes(q) || String(v.value).toLowerCase().includes(q));
+
+  if(rows.length===0){
+    body.innerHTML=`<div class="empty-state">${Object.keys(map).length===0?'No keys yet — click "New key" to get started':'No keys match your search'}</div>`;
+    return;
+  }
+
+  body.innerHTML = rows.map(([k,v])=>{
+    const chips = v.owners.map((port,i)=>{
+      const label = 'n' + NODES.findIndex(n=>n.port===port);
+      return `<span class="replica-chip ${i===0?'primary':''}">${label}</span>`;
+    }).join('');
+    return `
+      <div class="table-row">
+        <div class="key-cell">${escapeHtml(k)}</div>
+        <div class="val-cell">${escapeHtml(v.value)}</div>
+        <div class="replica-list">${chips}</div>
+        <div class="row-actions">
+          <button class="icon-btn-sm" onclick="deleteKey('${escapeHtml(k)}')" title="Delete">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function toggleChaos(port, isUp){
+  const action = isUp ? 'outage' : 'recover';
+  try{
+    await fetch(`http://localhost:${port}/internal/chaos/${action}`,{method:'POST'});
+    if(isUp){
+      toast('error','Node outage simulated',`node :${port} is now offline`);
+      log(`CHAOS  node :${port} → OFFLINE`, 'err');
+    }else{
+      toast('success','Node recovered',`node :${port} is back online`);
+      log(`CHAOS  node :${port} → RECOVERED`, 'ok');
+    }
+    setTimeout(refreshAll, 300);
+  }catch(e){ toast('error','Chaos command failed', e.message); }
+}
+
+async function refreshAll(){
+  await Promise.all(NODES.map(n=>Promise.all([pingNode(n), fetchKeys(n)])));
+  renderNodes(); renderStats(); renderTable();
+}
+
+function openPutModal(){
+  document.getElementById('put-modal-body').innerHTML = `
+    <div class="field"><label>Target node (any — ring will route)</label>
+      <select class="input" id="put-node">
+        <option value="8080">node-1 (:8080)</option>
+        <option value="8081">node-2 (:8081)</option>
+        <option value="8082">node-3 (:8082)</option>
+      </select>
+    </div>
+    <div class="field"><label>Key</label><input class="input" id="put-key" placeholder="e.g. user:42"></div>
+    <div class="field"><label>Value</label><input class="input" id="put-value" placeholder="e.g. Alice"></div>`;
+  document.getElementById('put-modal-foot').innerHTML = `
+    <button class="btn btn-secondary" onclick="closeModal('put-modal')">Cancel</button>
+    <button class="btn btn-primary" onclick="submitPut()">Store value</button>`;
+  document.getElementById('put-modal').classList.add('active');
+  setTimeout(()=>{ const k = document.getElementById('put-key'); if(k) k.focus(); },100);
+}
+function closeModal(id){ document.getElementById(id).classList.remove('active'); }
+
+async function submitPut(){
+  const port=document.getElementById('put-node').value;
+  const key=document.getElementById('put-key').value.trim();
+  const value=document.getElementById('put-value').value;
+  if(!key){ toast('error','Key required','Please enter a key name'); return; }
+  try{
+    const r = await fetch(`http://localhost:${port}/api/kv/${encodeURIComponent(key)}`,{
+      method:'PUT',headers:{'Content-Type':'text/plain'},body:value
+    });
+    const trace = await r.json();
+    toast(trace.success?'success':'error', trace.success?'Key stored':'Quorum failed', `${key} = "${value}" · ${trace.message||''}`);
+    log(`PUT  ${key} = "${value}"  →  :${port}  · ${trace.message||''}`, trace.success?'ok':'err');
+    document.getElementById('put-modal-body').innerHTML = '<div id="modal-trace"></div>';
+    document.getElementById('put-modal-foot').innerHTML = '<button class="btn btn-secondary" onclick="closeModal(\'put-modal\')">Close</button>';
+    renderTrace(trace, document.getElementById('modal-trace'));
+    setTrace(trace);
+    refreshAll();
+  }catch(e){ toast('error','Request failed', e.message); }
+}
+
+async function deleteKey(key){
+  if(!confirm(`Delete "${key}"?`)) return;
+  try{
+    let lastTrace = null;
+    for(const n of NODES){
+      if(state.keys[n.port][key] !== undefined){
+        const r = await fetch(`http://localhost:${n.port}/api/kv/${encodeURIComponent(key)}`,{method:'DELETE'});
+        try { lastTrace = await r.json(); } catch {}
+      }
+    }
+    if(lastTrace) setTrace(lastTrace);
+    toast('success','Key deleted', key);
+    log(`DELETE  ${key}  →  cluster`, 'ok');
+    refreshAll();
+  }catch(e){ toast('error','Delete failed', e.message); }
+}
+
+async function runPlayground(){
+  const method=document.getElementById('pg-method').value;
+  const port=document.getElementById('pg-node').value;
+  const key=document.getElementById('pg-key').value.trim();
+  const value=document.getElementById('pg-value').value;
+  if(!key){ toast('error','Key required','Enter a key'); return; }
+  const url=`http://localhost:${port}/api/kv/${encodeURIComponent(key)}`;
+  try{
+    const opts={method};
+    if(method==='PUT'){ opts.headers={'Content-Type':'text/plain'}; opts.body=value; }
+    const r = await fetch(url,opts);
+    const trace = await r.json();
+    renderTrace(trace, document.getElementById('pg-trace'));
+    setTrace(trace);
+    toast(trace.success?'success':'error', method+' completed', trace.message||'');
+    log(`${method}  ${key}  →  :${port}  · ${trace.message||''}`, trace.success?'ok':'err');
+    refreshAll();
+  }catch(e){ toast('error','Request failed', e.message); }
+}
+
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') document.querySelectorAll('.modal-backdrop.active').forEach(m=>m.classList.remove('active'));
+});
+
+renderLogs();
+enterApp();
+log('KVault console loaded · auto-refresh every 2s', 'info');
+refreshAll();
+setInterval(refreshAll, 2000);
+</script>
+</body>
+</html>
